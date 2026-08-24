@@ -329,12 +329,17 @@ verifiable measurements are recorded per row (see
    incremental memory, with one clear exception noted below.
 2. **MPS driver-allocated memory** (`mps_driver_allocated_mb`, MPS rows
    only): `torch.mps.driver_allocated_memory()`, read after each row's
-   timed passes. This is a real Metal/PyTorch allocator counter and is
-   the cleaner per-configuration signal on MPS, since it reflects that
-   configuration's actual GPU-side buffer footprint rather than
-   cumulative process history. No CUDA-style `max_memory_allocated`
-   analogue exists for MPS in this PyTorch version, so no such figure is
-   reported or approximated.
+   timed passes. Per PyTorch's own docstring for this function, it
+   "returns total GPU memory allocated by Metal driver for the process
+   in bytes," and explicitly "includes cached allocations in
+   MPSAllocator pools as well as allocations from MPS/MPSGraph
+   frameworks." It is therefore a process-wide, driver-level figure —
+   not a measurement isolated to only the model's own live tensors —
+   and is the cleaner per-configuration signal on MPS here, since it
+   reflects that configuration's actual GPU-side buffer footprint rather
+   than cumulative process history the way process RSS does. No
+   CUDA-style `max_memory_allocated` analogue exists for MPS in this
+   PyTorch version, so no such figure is reported or approximated.
 
 | Backbone | Device | Batch | Process delta RSS (MB) | MPS driver-allocated (MB) |
 |---|---|---|---|---|
@@ -385,13 +390,15 @@ Raw data: `experiments/results/benchmark_full.json` (includes
   isolating forward-only vs. forward+backward RSS), so it is flagged as
   an open observation rather than presented as a confirmed causal
   explanation.
-- `mps_current_allocated_mb` (PyTorch's own internal MPS allocator
-  counter, distinct from the driver-level counter above) stayed nearly
-  flat across all batch sizes for both backbones (Mamba: ~0.535 MB
-  constant; GRU: ~0.435 MB constant) — this counter appears to track a
-  much smaller/different quantity than `driver_allocated_memory` (likely
-  only currently-live, non-cached PyTorch tensor allocations rather than
-  total driver-reserved buffer space) and is recorded in the raw JSON for
+- `mps_current_allocated_mb` (`torch.mps.current_allocated_memory()`)
+  stayed nearly flat across all batch sizes for both backbones (Mamba:
+  ~0.535 MB constant; GRU: ~0.435 MB constant). Per PyTorch's own
+  docstring, this function "returns the current GPU memory occupied by
+  tensors in bytes" and explicitly "does not include cached allocations
+  in memory pools of MPSAllocator" — this is a confirmed, documented
+  difference from `driver_allocated_memory()` (which does include those
+  cached/pooled allocations), not a guess about why the two counters
+  diverge so sharply here. It is recorded in the raw JSON for
   completeness, but `mps_driver_allocated_mb` is treated as the
   informative per-row MPS memory figure above since it is the one that
   visibly scales with batch size and model.
@@ -488,3 +495,59 @@ discussion/conclusions until results exist.)
   not "paper documentation" for the current Mamba experimental results
   and rewriting them would erase an accurate record of an earlier,
   explicitly abandoned decision rather than correct a stale claim.
+- 2026-08-24: Final pre-paper scientific audit. Independently re-verified
+  (not just re-read) every claim category the project brief flags as
+  critical: the algorithm-audit's "Mamba absent from the spreadsheet"
+  finding was reproduced by an independent keyword search over the
+  actual `Voice_Assistant_AI_ML_Papers_2022-2025.xlsx` (25 data rows
+  confirmed, zero matches for mamba/state space/selective ssm/ssm across
+  Algorithm/Title/Abstract, matching `algorithm_audit.md` exactly); all
+  accuracy/precision/recall/F1/confusion-matrix numbers were cross-checked
+  directly against `experiments/results/{mamba,gru}_run1/test_metrics.json`
+  and `noise_robustness.json` (exact match); parameter counts and
+  training times were cross-checked against each run's `summary.json`
+  (exact match); the "40/40 tests pass" claim in reproducibility.md was
+  verified by counting `def test_` functions across `tests/*.py` (37
+  functions, 3 of which are `@pytest.mark.parametrize`d over 2 backbones
+  each, giving 40 collected test items — consistent, not fabricated);
+  the claim in `methodology_notes.md` that the official `mamba-ssm`
+  reference implementation's default uses the first-order B_bar ~= delta*B
+  approximation (not exact ZOH) was independently verified by reading
+  `state-spaces/mamba`'s own `step()` source, which does exactly that;
+  the `torch.mps.driver_allocated_memory()` / `current_allocated_memory()`
+  descriptions were checked against PyTorch's actual source docstrings
+  (`torch/mps/__init__.py`) rather than assumed, and both documents'
+  wording was tightened to match the verified docstrings exactly (driver-
+  allocated memory: "total GPU memory allocated by Metal driver for the
+  process," includes cached MPSAllocator-pool allocations and MPS/
+  MPSGraph framework allocations; current-allocated memory: "current GPU
+  memory occupied by tensors," explicitly excludes cached pool
+  allocations) — this replaced a prior speculative "(likely...)" hedge
+  with the confirmed documented behavior.
+  **One real inconsistency was found and fixed, not previously caught:**
+  `paper/reproducibility.md` steps 6 and 8 gave the literal commands
+  `python scripts/train_mamba.py --run-name mamba_run1` and
+  `python scripts/train_gru.py --run-name gru_run1` as "exact commands to
+  reproduce" the reported results, but neither command included
+  `--epochs 8` — `configs/default.yaml`'s `training.epochs` default is
+  30, and `scripts/train_mamba.py`'s `--epochs` CLI flag defaults to
+  `None` (no override), so running the documented command as written
+  would train for 30 epochs, not the 8 actually used to produce the
+  reported 94.51%/93.99% results (confirmed against
+  `experiments/results/{mamba,gru}_run1/config.json`, both of which
+  record `"epochs": 8`). Both commands in `paper/reproducibility.md` were
+  corrected to include `--epochs 8` explicitly, with a note explaining
+  why the override is required. No numeric result was changed — this was
+  a reproducibility-instructions bug, not a results error; the reported
+  94.51%/93.99% figures are correct for the 8-epoch runs that actually
+  produced them.
+  No other cross-file inconsistency was found: end-to-end vs.
+  model-inference latency are kept distinct throughout Experiment 4 and
+  the benchmark sections; the 73.8%/94.8% post-fix figures are
+  consistently labeled "confidence," never "accuracy"; no claim of
+  universal Mamba superiority or unsupported novelty was found in any
+  paper/ document; the Apple-Silicon PyTorch reimplementation is
+  distinguished from the official CUDA `mamba-ssm` kernel in
+  `src/models/mamba.py`'s module docstring, `methodology_notes.md` §5,
+  and `README.md`; the CPU batch=64 process-RSS anomaly remains reported
+  as an observed, unexplained result in both documents.

@@ -75,8 +75,20 @@ training — something in the pipeline is broken.
 ## 6. Full training — Mamba
 
 ```bash
-python scripts/train_mamba.py --run-name mamba_run1
+python scripts/train_mamba.py --run-name mamba_run1 --epochs 8
 ```
+
+**The `--epochs 8` override is required to reproduce the specific
+`mamba_run1` result reported in `paper/experimental_results.md`.**
+`configs/default.yaml`'s `training.epochs` default is 30, not 8 — the
+actual `mamba_run1` run used 8 epochs (see
+`experiments/results/mamba_run1/config.json`, and
+`paper/methodology_notes.md` §7 for why: the sequential-scan Mamba
+implementation's per-epoch cost on this hardware made 8 epochs the
+practical choice for this first run). Running the command without
+`--epochs 8` will train for 30 epochs against the config default and
+will NOT reproduce the reported 94.51% test accuracy / 77.9-minute
+training time exactly — it will produce a different (longer) run.
 
 Optional overrides: `--epochs N --batch-size N`. Saves checkpoint to
 `models/mamba_run1.pt`, training curves to
@@ -99,12 +111,15 @@ confusion-matrix figure, a training-curves figure, and appends a row to
 ## 8. Full training + evaluation — GRU baseline
 
 ```bash
-python scripts/train_gru.py --run-name gru_run1
+python scripts/train_gru.py --run-name gru_run1 --epochs 8
 python scripts/evaluate.py --run-name gru_run1
 ```
 
-Identical protocol to steps 6-7 (same manifests, same optimizer/schedule/
-early-stopping settings), so the Mamba-vs-GRU comparison is fair.
+The same `--epochs 8` override applies here (see step 6's note) — the
+actual `gru_run1` run used 8 epochs, not the config default of 30 (see
+`experiments/results/gru_run1/config.json`). Identical protocol to
+steps 6-7 (same manifests, same optimizer/schedule/early-stopping
+settings, same epoch count), so the Mamba-vs-GRU comparison is fair.
 
 ## 9. Noise robustness experiment
 
@@ -206,18 +221,31 @@ commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99`. This closed the
 previously-`NOT YET MEASURED` memory-usage rows in Experiments 1-2 of
 `paper/experimental_results.md`. Three distinct quantities are recorded
 per row and must not be conflated with each other or referred to
-generically as "model memory": process peak RSS (whole-process resident
-set size, cumulative within a single `benchmark.py` run — see the
-caveat in that document about the first row absorbing one-time PyTorch/
-MPS import cost), MPS current-allocated memory (PyTorch's internal
-live-tensor allocator counter, which stayed nearly flat across batch
-sizes and is not the informative signal here), and MPS driver-allocated
-memory (the Metal driver's actual reserved buffer size, which scales
-cleanly with batch size and model and is the more informative per-row
-MPS figure). See `paper/experimental_results.md`'s "Full benchmark
-sweep — memory" section for the full measured table and the CPU
-batch=64 process-RSS anomaly, which is reported as an observed result
-without an invented causal explanation.
+generically as "model memory":
+
+- **Process peak RSS** (`process_delta_rss_mb`) — whole-process resident
+  set size, cumulative within a single `benchmark.py` run (see the
+  caveat in `paper/experimental_results.md` about the first row
+  absorbing one-time PyTorch/MPS import cost).
+- **MPS current-allocated memory** (`mps_current_allocated_mb`,
+  `torch.mps.current_allocated_memory()`) — per PyTorch's own docstring,
+  "the current GPU memory occupied by tensors," which explicitly
+  **excludes** cached allocations held in MPSAllocator's memory pools.
+  It stayed nearly flat across batch sizes in this benchmark and is not
+  the informative per-row signal here.
+- **MPS driver-allocated memory** (`mps_driver_allocated_mb`,
+  `torch.mps.driver_allocated_memory()`) — per PyTorch's own docstring,
+  "total GPU memory allocated by Metal driver for the process," which
+  explicitly **includes** cached allocations in MPSAllocator pools as
+  well as allocations from the MPS/MPSGraph frameworks. This is a
+  process-wide driver-level figure, not a measurement isolated to the
+  model's own tensors, and it is the more informative per-row MPS
+  figure here since it scales cleanly with batch size and model.
+
+See `paper/experimental_results.md`'s "Full benchmark sweep — memory"
+section for the full measured table and the CPU batch=64 process-RSS
+anomaly, which is reported as an observed result without an invented
+causal explanation.
 
 ## Environment used for the reported results
 
