@@ -1,0 +1,38 @@
+{
+  "run_name": "mamba_run1",
+  "backbone": "mamba",
+  "results": {
+    "clean": {
+      "snr_db": null,
+      "accuracy": 0.945054945054945,
+      "macro_f1": 0.9449882052990666,
+      "macro_precision": 0.945462390749842,
+      "macro_recall": 0.9449899900920357,
+      "n_samples": 3276
+    },
+    "mild": {
+      "snr_db": 20,
+      "accuracy": 0.6575091575091575,
+      "macro_f1": 0.6480182369838356,
+      "macro_precision": 0.7636573018080667,
+      "macro_recall": 0.6584168614457757,
+      "n_samples": 3276
+    },
+    "moderate": {
+      "snr_db": 10,
+      "accuracy": 0.15964590964590963,
+      "macro_f1": 0.08467881584502729,
+      "macro_precision": 0.5776801715742207,
+      "macro_recall": 0.15680791137670247,
+      "n_samples": 3276
+    },
+    "strong": {
+      "snr_db": 0,
+      "accuracy": 0.14041514041514042,
+      "macro_f1": 0.048674292148950346,
+      "macro_precision": 0.053468423125738546,
+      "macro_recall": 0.13748120016956142,
+      "n_samples": 3276
+    }
+  }
+}

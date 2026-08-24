@@ -1,0 +1,12 @@
+{
+  "run_name": "gru_run1",
+  "backbone": "gru",
+  "n_params": 113832,
+  "device": "mps",
+  "total_training_time_sec": 282.7797830104828,
+  "epochs_run": 8,
+  "final_train_acc": 0.952656496580747,
+  "final_val_acc": 0.9410178631614425,
+  "best_val_acc": 0.9410178631614425,
+  "checkpoint_path": "/Users/devv/Documents/Sorted/Documents/research paper/mamba-speech-command/models/gru_run1.pt"
+}

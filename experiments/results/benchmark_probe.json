@@ -1,0 +1,54 @@
+[
+  {
+    "backbone": "mamba",
+    "device": "mps",
+    "batch_size": 64,
+    "n_params": 140264,
+    "fwd_bwd_mean_sec": 1.4636853335000524,
+    "fwd_bwd_min_sec": 1.4635043329999462,
+    "fwd_bwd_max_sec": 1.4638663340001585,
+    "inference_mean_sec": 0.06579641633319018,
+    "inference_min_sec": 0.06562616599967441,
+    "inference_max_sec": 0.0659920409998449,
+    "inference_per_sample_ms": 1.0280690052060966
+  },
+  {
+    "backbone": "mamba",
+    "device": "cpu",
+    "batch_size": 64,
+    "n_params": 140264,
+    "fwd_bwd_mean_sec": 2.560013749999598,
+    "fwd_bwd_min_sec": 2.558028624999679,
+    "fwd_bwd_max_sec": 2.5619988749995173,
+    "inference_mean_sec": 0.43967273633370496,
+    "inference_min_sec": 0.43851304200052255,
+    "inference_max_sec": 0.4404115000006641,
+    "inference_per_sample_ms": 6.86988650521414
+  },
+  {
+    "backbone": "gru",
+    "device": "mps",
+    "batch_size": 64,
+    "n_params": 113832,
+    "fwd_bwd_mean_sec": 0.07041522949975842,
+    "fwd_bwd_min_sec": 0.06966899999952147,
+    "fwd_bwd_max_sec": 0.07116145899999538,
+    "inference_mean_sec": 0.021030889000333747,
+    "inference_min_sec": 0.02092070800063084,
+    "inference_max_sec": 0.021156750000045577,
+    "inference_per_sample_ms": 0.3286076406302148
+  },
+  {
+    "backbone": "gru",
+    "device": "cpu",
+    "batch_size": 64,
+    "n_params": 113832,
+    "fwd_bwd_mean_sec": 0.03056356249953751,
+    "fwd_bwd_min_sec": 0.02861954199943284,
+    "fwd_bwd_max_sec": 0.03250758299964218,
+    "inference_mean_sec": 0.011722042000049745,
+    "inference_min_sec": 0.011516708999806724,
+    "inference_max_sec": 0.012015541999971902,
+    "inference_per_sample_ms": 0.18315690625077727
+  }
+]

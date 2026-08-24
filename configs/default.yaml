@@ -1,0 +1,130 @@
+# =============================================================================
+# Central configuration for the Mamba speech-command recognition project.
+# Every script (dataset prep, training, evaluation, benchmarking, real-time
+# demo) reads its parameters from this file rather than hard-coding values.
+# Override individual fields with CLI flags (--config path or key=value) where
+# each script supports it; see each script's --help.
+# =============================================================================
+
+project:
+  name: "mamba-speech-command"
+  seed: 42
+  authors:
+    - "Dev Choudhary (046)"
+    - "Abheer Bhati (177)"
+  institution: "Symbiosis Institute of Computer Studies and Research"
+
+# ---------------------------------------------------------------------------
+# Dataset
+# ---------------------------------------------------------------------------
+dataset:
+  name: "speech_commands_v0.02"
+  source_url: "http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz"
+  # 8-command closed vocabulary specified by the project brief.
+  commands:
+    - "yes"
+    - "no"
+    - "up"
+    - "down"
+    - "left"
+    - "right"
+    - "go"
+    - "stop"
+  # Google Speech Commands ships official validation_list.txt / testing_list.txt
+  # files that assign whole speakers to val/test to prevent speaker leakage.
+  # We use these official lists rather than a random per-utterance split.
+  use_official_split_lists: true
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  target_duration_sec: 1.0     # Speech Commands utterances are ~1s; pad/trim to this
+
+# ---------------------------------------------------------------------------
+# Audio / feature extraction
+# ---------------------------------------------------------------------------
+audio:
+  sample_rate: 16000           # standard for speech-command recognition (Speech Commands native rate)
+  n_channels: 1                # mono
+  normalize: "peak"            # peak-normalize waveform to [-1, 1] before feature extraction
+
+features:
+  type: "log_mel_spectrogram"
+  n_fft: 512                   # ~32ms window at 16kHz, standard for speech
+  win_length: 400               # 25ms window (400 samples @ 16kHz) — classic ASR default
+  hop_length: 160               # 10ms hop (160 samples @ 16kHz) — classic ASR default
+  n_mels: 40                    # compact Mel bank; sufficient for closed-vocab command recognition
+  f_min: 20
+  f_max: 8000                   # Nyquist at 16kHz
+  log_offset: 1.0e-6             # numerical stability inside log()
+
+# ---------------------------------------------------------------------------
+# Model: Mamba (Selective SSM) — the principal architecture under study
+# ---------------------------------------------------------------------------
+model_mamba:
+  d_model: 64                  # feature projection / residual stream width
+  d_state: 16                  # SSM state dimension N
+  d_conv: 4                    # local causal conv kernel width inside each Mamba block
+  expand: 2                    # inner expansion factor for the block's MLP-like path
+  n_layers: 4                  # number of stacked Mamba blocks
+  dropout: 0.1
+  pooling: "mean"               # temporal pooling before the classification head: mean | last | max
+
+# ---------------------------------------------------------------------------
+# Model: GRU baseline (matched capacity, same features/task/protocol)
+# ---------------------------------------------------------------------------
+model_gru:
+  d_model: 64                  # same input projection width as Mamba for a fair comparison
+  hidden_size: 96               # tuned so parameter count is in the same order of magnitude as Mamba
+  n_layers: 2
+  bidirectional: false          # unidirectional to remain comparable to Mamba's causal processing
+  dropout: 0.1
+  pooling: "mean"
+
+classifier:
+  n_classes: 8
+  head_hidden: 32
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  batch_size: 64
+  epochs: 30
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-4
+  optimizer: "adamw"
+  lr_schedule: "cosine"
+  grad_clip_norm: 1.0
+  early_stopping_patience: 6
+  num_workers: 4
+  checkpoint_dir: "models"
+
+# ---------------------------------------------------------------------------
+# Noise robustness experiment (Experiment 3)
+# ---------------------------------------------------------------------------
+noise:
+  conditions:
+    clean:     { snr_db: null }   # no noise added
+    mild:      { snr_db: 20 }
+    moderate:  { snr_db: 10 }
+    strong:    { snr_db: 0 }
+  noise_type: "additive_white_gaussian"   # reproducible, no external noise corpus dependency
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Real-time inference / demo
+# ---------------------------------------------------------------------------
+realtime:
+  input_device: null            # null = system default input device
+  buffer_duration_sec: 1.0
+  latency_target_ms: 200        # explicit criterion for "real-time": total end-to-end latency budget
+  vad_energy_threshold: 0.01    # simple energy-based trigger to detect speech onset
+  post_trigger_wait_sec: 0.35   # after VAD fires, keep recording this long before snapshotting,
+                                 # so the spoken word lands nearer the window's center like training
+                                 # clips do, rather than at the trailing edge (see MicrophoneListener docstring)
+
+# ---------------------------------------------------------------------------
+# Device strategy
+# ---------------------------------------------------------------------------
+device:
+  prefer: "mps"                 # try MPS first
+  fallback: "cpu"                # fall back to CPU if MPS unavailable or an op is unsupported

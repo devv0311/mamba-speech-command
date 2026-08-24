@@ -1,0 +1,12 @@
+{
+  "run_name": "mamba_run1",
+  "backbone": "mamba",
+  "n_params": 140264,
+  "device": "mps",
+  "total_training_time_sec": 4674.578177213669,
+  "epochs_run": 8,
+  "final_train_acc": 0.9606280095496298,
+  "final_val_acc": 0.9477586788001349,
+  "best_val_acc": 0.9477586788001349,
+  "checkpoint_path": "/Users/devv/Documents/Sorted/Documents/research paper/mamba-speech-command/models/mamba_run1.pt"
+}

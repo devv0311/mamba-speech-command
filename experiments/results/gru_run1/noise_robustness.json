@@ -1,0 +1,38 @@
+{
+  "run_name": "gru_run1",
+  "backbone": "gru",
+  "results": {
+    "clean": {
+      "snr_db": null,
+      "accuracy": 0.9398656898656899,
+      "macro_f1": 0.9395432071480819,
+      "macro_precision": 0.939982177780762,
+      "macro_recall": 0.9395761004845145,
+      "n_samples": 3276
+    },
+    "mild": {
+      "snr_db": 20,
+      "accuracy": 0.8195970695970696,
+      "macro_f1": 0.8197453389308665,
+      "macro_precision": 0.839086066447226,
+      "macro_recall": 0.8185757047247851,
+      "n_samples": 3276
+    },
+    "moderate": {
+      "snr_db": 10,
+      "accuracy": 0.2863247863247863,
+      "macro_f1": 0.200003132938176,
+      "macro_precision": 0.7296765651447202,
+      "macro_recall": 0.2833933512961081,
+      "n_samples": 3276
+    },
+    "strong": {
+      "snr_db": 0,
+      "accuracy": 0.13247863247863248,
+      "macro_f1": 0.041302957906605785,
+      "macro_precision": 0.03851620968276045,
+      "macro_recall": 0.12967163665205414,
+      "n_samples": 3276
+    }
+  }
+}

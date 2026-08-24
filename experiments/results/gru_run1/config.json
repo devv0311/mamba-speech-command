@@ -1,0 +1,105 @@
+{
+  "project": {
+    "name": "mamba-speech-command",
+    "seed": 42,
+    "authors": [
+      "Dev Choudhary (046)",
+      "Abheer Bhati (177)"
+    ],
+    "institution": "Symbiosis Institute of Computer Studies and Research"
+  },
+  "dataset": {
+    "name": "speech_commands_v0.02",
+    "source_url": "http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz",
+    "commands": [
+      "yes",
+      "no",
+      "up",
+      "down",
+      "left",
+      "right",
+      "go",
+      "stop"
+    ],
+    "use_official_split_lists": true,
+    "raw_dir": "data/raw",
+    "processed_dir": "data/processed",
+    "target_duration_sec": 1.0
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "n_channels": 1,
+    "normalize": "peak"
+  },
+  "features": {
+    "type": "log_mel_spectrogram",
+    "n_fft": 512,
+    "win_length": 400,
+    "hop_length": 160,
+    "n_mels": 40,
+    "f_min": 20,
+    "f_max": 8000,
+    "log_offset": 1e-06
+  },
+  "model_mamba": {
+    "d_model": 64,
+    "d_state": 16,
+    "d_conv": 4,
+    "expand": 2,
+    "n_layers": 4,
+    "dropout": 0.1,
+    "pooling": "mean"
+  },
+  "model_gru": {
+    "d_model": 64,
+    "hidden_size": 96,
+    "n_layers": 2,
+    "bidirectional": false,
+    "dropout": 0.1,
+    "pooling": "mean"
+  },
+  "classifier": {
+    "n_classes": 8,
+    "head_hidden": 32
+  },
+  "training": {
+    "batch_size": 64,
+    "epochs": 8,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "optimizer": "adamw",
+    "lr_schedule": "cosine",
+    "grad_clip_norm": 1.0,
+    "early_stopping_patience": 6,
+    "num_workers": 4,
+    "checkpoint_dir": "models"
+  },
+  "noise": {
+    "conditions": {
+      "clean": {
+        "snr_db": null
+      },
+      "mild": {
+        "snr_db": 20
+      },
+      "moderate": {
+        "snr_db": 10
+      },
+      "strong": {
+        "snr_db": 0
+      }
+    },
+    "noise_type": "additive_white_gaussian",
+    "seed": 42
+  },
+  "realtime": {
+    "input_device": null,
+    "buffer_duration_sec": 1.0,
+    "latency_target_ms": 200,
+    "vad_energy_threshold": 0.01
+  },
+  "device": {
+    "prefer": "mps",
+    "fallback": "cpu"
+  }
+}

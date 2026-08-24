@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Data & models (large, regenerable)
+data/raw/
+data/processed/
+data/SpeechCommands/
+*.wav
+!tests/fixtures/**/*.wav
+models/*.pt
+models/*.pth
+models/*.ckpt
+
+# Experiment outputs (regenerable, but keep results/*.csv and *.json tracked)
+experiments/logs/*
+!experiments/logs/.gitkeep
+
+# OS
+.DS_Store
+
+# Env
+.env
