@@ -16,9 +16,13 @@ PyTorch MPS backend, CPU fallback.
 
 ## Status
 
-See `paper/experimental_results.md` for verified, measured results only.
-Anything not yet run is explicitly marked `NOT YET MEASURED` — no numbers
-in this repository are fabricated.
+See `paper/experimental_results.md` for verified, measured results —
+accuracy, latency, and memory usage for both Mamba and the GRU baseline,
+noise robustness, and live-microphone real-time inference, all measured
+on the target Mac. No numbers in this repository are fabricated; any
+metric not yet run would be explicitly marked `NOT YET MEASURED`, and as
+of commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99` no metric in the
+project brief remains in that state.
 
 ## Quick start
 
@@ -31,7 +35,7 @@ python scripts/env_report.py       # re-check environment anytime
 ```
 
 See `paper/reproducibility.md` for the full command sequence to reproduce
-every experiment once implemented.
+every experiment.
 
 ## Project structure
 

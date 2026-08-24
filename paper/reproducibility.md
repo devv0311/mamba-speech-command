@@ -129,8 +129,16 @@ python scripts/benchmark.py
 ```
 
 Sweeps both backbones × both available devices × several batch sizes,
-measuring real forward+backward and inference timing. Writes
-`experiments/results/benchmark_full.json`.
+measuring real forward+backward and inference timing, **plus real memory
+usage**: process peak RSS (`resource.getrusage`, before/after each row)
+and, on MPS rows, the PyTorch/Metal allocator counters
+(`torch.mps.current_allocated_memory()` / `driver_allocated_memory()`).
+Writes `experiments/results/benchmark_full.json`. See
+`paper/experimental_results.md`'s "Full benchmark sweep — memory" section
+for the measured figures and the methodology caveats (in particular: RSS
+deltas are cumulative within one process, so the first row absorbs
+one-time PyTorch/MPS import cost — MPS driver-allocated memory is the
+cleaner per-row signal on MPS).
 
 ## 11. Real-time microphone demo
 
@@ -166,12 +174,50 @@ rebuilt from scratch (`rm -rf .venv && bash scripts/setup_env.sh`), then:
   deterministic evaluation pass over a fixed checkpoint and fixed test
   set, not from a step with run-to-run randomness.
 
-**Known reproducibility gap:** `scripts/env_report.py` reports
-`git commit: NOT_A_GIT_REPO_OR_GIT_UNAVAILABLE` — this project has not
-yet been placed under version control, so no result in this document is
-tied to a specific commit hash. Recommended before the paper is finalized:
-`git init` + an initial commit, so `env_report.py`'s git-commit field
-becomes meaningful for future runs.
+**Version control:** the project is under version control — `git init`
+plus an initial commit (`f28fb63`, "Initial commit: Mamba speech-command
+recognition project") on branch `main`, tracking `origin/main`. This
+document previously (through the commit tagged below) stated the project
+was "not yet under version control" / that `scripts/env_report.py`
+reported `NOT_A_GIT_REPO_OR_GIT_UNAVAILABLE` — that statement is now
+obsolete and has been removed; `env_report.py` runs from this point
+onward record a real commit hash.
+
+**Current benchmark/results commit:** `26bc1639d027a3cc697d3ebf2cb4eae27d233e99`
+("Add real memory measurement (RSS + MPS allocator) to benchmark.py") is
+the commit that added memory instrumentation to `scripts/benchmark.py`
+and the corresponding measured output at
+`experiments/results/benchmark_full.json`. This is the authoritative
+commit for every latency and memory figure currently reported in
+`paper/experimental_results.md` — `scripts/benchmark.py` and
+`experiments/results/benchmark_full.json` as they exist at this commit
+reproduce those numbers exactly (re-running the script will produce a
+new run with ordinary hardware/timing variance, not necessarily
+bit-identical figures, since the benchmark measures live process/GPU
+memory and wall-clock timing rather than a seeded, purely deterministic
+computation).
+
+**Memory measurement:** `scripts/benchmark.py` was extended with real
+memory instrumentation — process peak RSS via `resource.getrusage`
+(`RUSAGE_SELF`, before/after each row) and, on MPS rows, the PyTorch/
+Metal allocator counters `torch.mps.current_allocated_memory()` and
+`torch.mps.driver_allocated_memory()` — and re-run on the target Mac at
+commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99`. This closed the
+previously-`NOT YET MEASURED` memory-usage rows in Experiments 1-2 of
+`paper/experimental_results.md`. Three distinct quantities are recorded
+per row and must not be conflated with each other or referred to
+generically as "model memory": process peak RSS (whole-process resident
+set size, cumulative within a single `benchmark.py` run — see the
+caveat in that document about the first row absorbing one-time PyTorch/
+MPS import cost), MPS current-allocated memory (PyTorch's internal
+live-tensor allocator counter, which stayed nearly flat across batch
+sizes and is not the informative signal here), and MPS driver-allocated
+memory (the Metal driver's actual reserved buffer size, which scales
+cleanly with batch size and model and is the more informative per-row
+MPS figure). See `paper/experimental_results.md`'s "Full benchmark
+sweep — memory" section for the full measured table and the CPU
+batch=64 process-RSS anomaly, which is reported as an observed result
+without an invented causal explanation.
 
 ## Environment used for the reported results
 

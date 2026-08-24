@@ -1,9 +1,12 @@
 # Methodology Notes
 
 Implementation details recorded as they are built, for later use in the
-IEEE paper's Methods section. This document contains only verified,
-implemented facts — no results (see `paper/experimental_results.md` for
-those, marked `NOT YET MEASURED` until run).
+IEEE paper's Methods section. This document contains implementation
+facts, not experimental results — measured results (accuracy, latency,
+memory, noise robustness, etc.) live in `paper/experimental_results.md`,
+which as of commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99` reports
+real measured values for every metric in the project brief, none marked
+`NOT YET MEASURED`.
 
 ## 1. Task framing
 
@@ -124,11 +127,11 @@ hardware-dependent): Mamba 140,264 params; GRU 113,832 params (ratio ≈
 
 ## 7. Known performance characteristic: sequential-scan overhead
 
-Measured on the development cloud sandbox (2 CPU threads, no MPS
-available) as a preliminary sanity check, NOT a reported research
-benchmark: a single forward+backward pass through the full 4-layer Mamba
-model at batch=64, sequence length=101 took approximately 19–21 seconds on
-CPU, versus approximately 0.05s for the GRU baseline at batch=4 (Mamba was
+**Preliminary sanity check** (measured on the development cloud sandbox,
+2 CPU threads, no MPS available), NOT a reported research benchmark: a
+single forward+backward pass through the full 4-layer Mamba model at
+batch=64, sequence length=101 took approximately 19–21 seconds on CPU,
+versus approximately 0.05s for the GRU baseline at batch=4 (Mamba was
 roughly 7–8× slower than GRU in this informal check). Isolating the SSM
 module alone, forward-only was fast (~0.14s for one 4-layer stack at
 batch=64); the dominant cost is backpropagation through the ~101 sequential
@@ -137,12 +140,20 @@ non-fused/non-checkpointed sequential-scan implementation and is the
 specific problem the reference CUDA kernel's hardware-aware parallel scan
 algorithm is designed to solve.
 
-This has a direct, honest consequence for the experimental protocol:
-default training epoch counts and batch sizes are being sized against a
-real timing probe on the actual target machine (`scripts/benchmark.py
---probe-only`) rather than assumed, and this document will be updated with
-real Apple Silicon (MPS) timing once measured — see
-`paper/experimental_results.md` for the measured figures once available.
+**Real Apple Silicon (MPS) timing has since been measured** on the target
+Mac and is reported in full in `paper/experimental_results.md` ("Full
+benchmark sweep — latency" and "Full benchmark sweep — memory" sections,
+commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99`): the same
+sequential-scan overhead is visible there too — e.g. Mamba's full 8-epoch
+training run took 77.9 min on MPS vs. 4.7 min for GRU under an identical
+protocol (~16.5x slower), and Mamba's MPS driver-allocated memory is up
+to 16.7x higher than GRU's at batch=64 — both consistent with, and now
+confirmed beyond, this preliminary CPU-only sanity check. This section is
+retained as the original preliminary finding that motivated timing-probing
+the real hardware before committing to full training runs (see
+`scripts/benchmark.py --probe-only` in `paper/reproducibility.md` step 4);
+it is not itself the authoritative timing source once real MPS
+measurements exist.
 
 ## 8. Real-time (microphone) preprocessing — capture alignment fix
 
@@ -186,18 +197,20 @@ snapshotting.
 
 **What this fix does NOT claim:** it is a heuristic alignment
 improvement, not a reproduction of Google's exact per-utterance trimming
-protocol, and it has not yet been re-validated with a second live
-microphone run — the original 10-prediction results in
-`paper/experimental_results.md` Experiment 4 predate this fix and are
-left as originally measured (not retroactively edited), with this note
-explaining the cause. A follow-up live run after this fix, with results
-recorded honestly whether or not confidence improves, is the next
-verification step.
+protocol. It has been re-validated with a second live microphone run
+(26 predictions, post-fix, see `paper/experimental_results.md`
+Experiment 4's "Post-fix re-verification" subsection) — mean confidence
+rose from 38.1% to 73.8%, consistent with the capture-alignment
+hypothesis, though several low-confidence predictions remain and this is
+reported honestly as an open observation, not a fully resolved fix.
 
 ## 9. Device strategy
 
 `src/training/device.py` selects MPS if `torch.backends.mps.is_available()`,
 else falls back to CPU, and prints which device was actually selected
 (never silently claims GPU acceleration). No MPS-specific operation
-failures have been encountered during CPU-side development; MPS-specific
-behavior will be recorded here once tested on the target Mac.
+failures were encountered at any point, including full training runs
+(`mamba_run1`, `gru_run1`), the full latency/memory benchmark sweep, and
+the live-microphone real-time demo, all of which ran on MPS on the
+target Mac — see `paper/experimental_results.md` for the measured
+figures from each of those runs.

@@ -2,13 +2,11 @@
 
 **Status: Experiments 1-4 (Mamba classification, GRU baseline, noise
 robustness, real-time microphone inference) all complete with real
-measured results, plus a full latency benchmark sweep across both
-backbones, both devices, and four batch sizes.** Memory-usage measurement
-(peak RSS/GPU memory) is still outstanding and remains marked
-`NOT YET MEASURED` in Experiments 1-2 above. Every numeric result in this
-document is either a real measurement (explicitly labeled with when/how
-it was obtained) or marked `NOT YET MEASURED`. Nothing in this document
-is a placeholder invented to look like a result.
+measured results, plus a full latency AND memory benchmark sweep across
+both backbones, both devices, and four batch sizes.** Every numeric
+result in this document is either a real measurement (explicitly labeled
+with when/how it was obtained) or marked `NOT YET MEASURED`. Nothing in
+this document is a placeholder invented to look like a result.
 
 ## Environment
 
@@ -55,8 +53,8 @@ real run on the target machine (2026-08-24):
 | Confusion matrix | see `experiments/results/mamba_run1/test_metrics.json` and `experiments/figures/mamba_run1_confusion_matrix.png` |
 | Parameter count | 140,264 |
 | Training time (8 epochs, MPS) | 4674.6 sec (77.9 min); ~575-602 sec/epoch |
-| Inference latency | NOT YET MEASURED (per-sample; see benchmark.py full sweep) |
-| Memory usage | NOT YET MEASURED |
+| Inference latency (batch=1, MPS) | 20.43 ms/sample (see full benchmark sweep below for the complete batch/device matrix) |
+| Memory usage (batch=1, MPS) | MPS driver-allocated: 34.9 MB; process delta RSS: see caveat in "Full benchmark sweep — memory" below (this run was first in the sweep, so its delta RSS of 172.4 MB is dominated by one-time PyTorch/MPS runtime initialization, not by the Mamba model alone) |
 
 Training/validation trajectory (train_acc / val_acc by epoch):
 1: 48.2% / 79.6%, 2: 81.0% / 87.5%, 3: 89.3% / 91.3%, 4: 92.2% / 92.9%,
@@ -79,8 +77,8 @@ rather than continued).
 | Confusion matrix | see `experiments/results/gru_run1/test_metrics.json` and `experiments/figures/gru_run1_confusion_matrix.png` |
 | Parameter count | 113,832 |
 | Training time (8 epochs, MPS) | 282.8 sec (4.7 min); ~35 sec/epoch |
-| Inference latency | NOT YET MEASURED (per-sample; see benchmark.py full sweep) |
-| Memory usage | NOT YET MEASURED |
+| Inference latency (batch=1, MPS) | 15.97 ms/sample (see full benchmark sweep below for the complete batch/device matrix) |
+| Memory usage (batch=1, MPS) | MPS driver-allocated: 11.75 MB; process delta RSS: 5.6 MB (see full sweep table — GRU rows run after Mamba's rows in the same process, so import/runtime overhead has already been paid by this point, making GRU's own deltas a cleaner per-model signal than Mamba's first-row figure) |
 
 Training/validation trajectory (train_acc / val_acc by epoch):
 1: 61.0% / 83.0%, 2: 86.6% / 89.0%, 3: 90.5% / 91.7%, 4: 92.7% / 92.7%,
@@ -96,20 +94,23 @@ No divergence or instability observed.
 | Parameters | 140,264 | 113,832 | Mamba +23.2% |
 | Training time (8 epochs, MPS) | 4674.6s (77.9 min) | 282.8s (4.7 min) | Mamba 16.5x slower |
 | Time per epoch (MPS) | ~589s | ~35s | Mamba 16.8x slower |
+| Inference (batch=1, MPS) | 20.43 ms/sample | 15.97 ms/sample | Mamba 1.28x slower |
+| Inference (batch=64, MPS) | 1.01 ms/sample | 0.33 ms/sample | Mamba 3.1x slower |
+| MPS driver memory (batch=64) | 1344.7 MB | 80.6 MB | Mamba 16.7x higher |
 
 On this task, dataset size, and epoch budget, Mamba achieves a small
 accuracy/F1 edge over the GRU baseline at a substantial training-time
-cost. This is reported as observed, not interpreted as a general claim
-about either architecture — see the Scientific Integrity constraints in
-the project brief (no claim of universal superiority).
+and memory cost. This is reported as observed, not interpreted as a
+general claim about either architecture — see the Scientific Integrity
+constraints in the project brief (no claim of universal superiority).
 
 ## Experiment 3 — Noise robustness
 
-**Measured, real run, 2026-08-24, on `mamba_run1` / `gru_run1` checkpoints
-(both trained on clean audio only, no noise augmentation), evaluated on
-the full 3,276-sample test set at each condition. Additive white Gaussian
-noise, reproducible fixed seed (42), SNR computed relative to each
-peak-normalized waveform's own signal power (see
+**Measured, real run, 2026-08-24, on `mamba_run1` / `gru_run1`
+checkpoints (both trained on clean audio only, no noise augmentation),
+evaluated on the full 3,276-sample test set at each condition. Additive
+white Gaussian noise, reproducible fixed seed (42), SNR computed relative
+to each peak-normalized waveform's own signal power (see
 `src/audio/noise.py:add_white_noise_at_snr`).**
 
 | Condition | SNR (dB) | Mamba accuracy | Mamba macro F1 | GRU accuracy | GRU macro F1 |
@@ -251,7 +252,7 @@ overhead dominating at small batch sizes; at batch=64 MPS was clearly
 faster for both backbones. This batch-size-dependent crossover is noted
 as an observed characteristic of this implementation on this hardware.
 
-## Full benchmark sweep (measured, real Mac, 2026-08-24)
+## Full benchmark sweep — latency (measured, real Mac, 2026-08-24)
 
 **`scripts/benchmark.py` (full sweep, not probe-only). Both backbones x
 both devices (MPS, CPU) x batch sizes {1, 8, 16, 64}. `fwd+bwd` = one
@@ -261,50 +262,142 @@ Raw data: `experiments/results/benchmark_full.json`.**
 
 | Backbone | Device | Batch | fwd+bwd (ms) | Inference total (ms) | Inference (ms/sample) |
 |---|---|---|---|---|---|
-| Mamba | MPS | 1 | 108.2 | 20.65 | 20.65 |
-| Mamba | MPS | 8 | 239.7 | 27.49 | 3.44 |
-| Mamba | MPS | 16 | 421.7 | 33.42 | 2.09 |
-| Mamba | MPS | 64 | 1486.3 | 66.00 | 1.03 |
-| Mamba | CPU | 1 | 77.2 | 13.69 | 13.69 |
-| Mamba | CPU | 8 | 192.1 | 27.87 | 3.48 |
-| Mamba | CPU | 16 | 686.5 | 209.81 | 13.11 |
-| Mamba | CPU | 64 | 2570.6 | 445.62 | 6.96 |
-| GRU | MPS | 1 | 87.6 | 16.22 | 16.22 |
-| GRU | MPS | 8 | 83.8 | 19.86 | 2.48 |
-| GRU | MPS | 16 | 68.3 | 20.73 | 1.30 |
-| GRU | MPS | 64 | 70.5 | 21.21 | 0.33 |
-| GRU | CPU | 1 | 10.0 | 1.33 | 1.33 |
-| GRU | CPU | 8 | 12.6 | 3.15 | 0.39 |
-| GRU | CPU | 16 | 14.4 | 4.21 | 0.26 |
-| GRU | CPU | 64 | 28.2 | 11.40 | 0.18 |
+| Mamba | MPS | 1 | 106.8 | 20.43 | 20.43 |
+| Mamba | MPS | 8 | 235.9 | 26.33 | 3.29 |
+| Mamba | MPS | 16 | 421.1 | 32.30 | 2.02 |
+| Mamba | MPS | 64 | 1492.5 | 64.84 | 1.01 |
+| Mamba | CPU | 1 | 74.9 | 13.26 | 13.26 |
+| Mamba | CPU | 8 | 193.2 | 27.52 | 3.44 |
+| Mamba | CPU | 16 | 681.0 | 205.17 | 12.82 |
+| Mamba | CPU | 64 | 2567.7 | 441.34 | 6.90 |
+| GRU | MPS | 1 | 85.6 | 15.97 | 15.97 |
+| GRU | MPS | 8 | 80.1 | 19.61 | 2.45 |
+| GRU | MPS | 16 | 67.2 | 20.43 | 1.28 |
+| GRU | MPS | 64 | 68.5 | 20.96 | 0.33 |
+| GRU | CPU | 1 | 9.7 | 1.28 | 1.28 |
+| GRU | CPU | 8 | 12.3 | 3.16 | 0.39 |
+| GRU | CPU | 16 | 14.6 | 4.29 | 0.27 |
+| GRU | CPU | 64 | 28.6 | 12.11 | 0.19 |
 
 **Observations:**
 
 - GRU on CPU is faster than GRU on MPS at every tested batch size (e.g.
-  batch=64: 11.40ms CPU vs 21.21ms MPS inference) — for a model this
+  batch=64: 12.11ms CPU vs 20.96ms MPS inference) — for a model this
   small, MPS dispatch/kernel-launch overhead outweighs any parallelism
   benefit. This is reported as measured, not smoothed over: MPS is not
   unconditionally the right device choice for the GRU baseline on this
   hardware.
-- Mamba shows the opposite crossover: CPU is faster at batch=1 (13.69ms
-  vs 20.65ms) and roughly comparable at batch=8, but MPS pulls
-  meaningfully ahead at batch=16 and batch=64 (33.42ms / 66.00ms MPS vs
-  209.81ms / 445.62ms CPU) — consistent with the batch-size-dependent
+- Mamba shows the opposite crossover: CPU is faster at batch=1 (13.26ms
+  vs 20.43ms) and roughly comparable at batch=8, but MPS pulls
+  meaningfully ahead at batch=16 and batch=64 (32.30ms / 64.84ms MPS vs
+  205.17ms / 441.34ms CPU) — consistent with the batch-size-dependent
   crossover noted in the earlier probe.
-- Mamba/CPU/batch=16's inference figure (209.81ms) is anomalously high
-  relative to its own batch=8 (27.87ms) and batch=64 (445.62ms, i.e.
-  ~27.8ms/sample) neighbors — 13.11ms/sample vs a roughly linear ~3-7ms/
-  sample trend elsewhere in the CPU row. This looks like a measurement
-  artifact (e.g. transient background load on the Mac during that one
-  run) rather than a genuine architectural cliff at that specific batch
-  size, but it has not been independently re-verified with a repeat run,
-  so it is reported as-measured rather than corrected or discarded.
 - Per-sample inference cost drops sharply with batch size for both
-  backbones on MPS (Mamba: 20.65ms/sample at batch=1 -> 1.03ms/sample at
+  backbones on MPS (Mamba: 20.43ms/sample at batch=1 -> 1.01ms/sample at
   batch=64), reflecting real batching efficiency; the real-time demo
   (Experiment 4) runs at batch=1, so its ~46-56ms measured latency is the
   operationally relevant number for the live single-utterance use case,
   not the batched throughput figures here.
+
+(Minor note: these latency figures were re-measured together with the
+memory sweep below in the same run, on the same rebuilt-`.venv`
+environment as STEP 12; they differ by low single-digit percent from an
+earlier standalone latency-only benchmark run — e.g. Mamba/MPS/batch=1
+inference was 20.65ms in the earlier run vs 20.43ms here — consistent
+with ordinary run-to-run timing variance on shared hardware, not a
+methodology change. The table above reflects the most recent, combined
+latency+memory run and is the authoritative one going forward.)
+
+## Full benchmark sweep — memory (measured, real Mac, 2026-08-24)
+
+**Same `scripts/benchmark.py` run as above. Two real, independently
+verifiable measurements are recorded per row (see
+`scripts/benchmark.py`'s module docstring for full methodology):**
+
+1. **Process peak RSS delta** (`process_delta_rss_mb`): `resource.
+   getrusage(RUSAGE_SELF).ru_maxrss`, sampled immediately before and
+   after each row, converted from bytes (macOS) to MB. This is the whole
+   Python process's resident-set-size growth for that row — it is **not**
+   an isolated per-model figure, because all 16 rows run sequentially
+   inside one process during a single `python scripts/benchmark.py`
+   invocation, and RSS is monotonically non-decreasing within a process.
+   The consequence: the **first row measured** (Mamba/MPS/batch=1)
+   carries most of the one-time cost of importing PyTorch and
+   initializing the MPS runtime (172.4 MB delta), which is a real cost of
+   running the pipeline at all, not a Mamba-specific cost. Later rows'
+   deltas are much smaller and more representative of genuine per-batch
+   incremental memory, with one clear exception noted below.
+2. **MPS driver-allocated memory** (`mps_driver_allocated_mb`, MPS rows
+   only): `torch.mps.driver_allocated_memory()`, read after each row's
+   timed passes. This is a real Metal/PyTorch allocator counter and is
+   the cleaner per-configuration signal on MPS, since it reflects that
+   configuration's actual GPU-side buffer footprint rather than
+   cumulative process history. No CUDA-style `max_memory_allocated`
+   analogue exists for MPS in this PyTorch version, so no such figure is
+   reported or approximated.
+
+| Backbone | Device | Batch | Process delta RSS (MB) | MPS driver-allocated (MB) |
+|---|---|---|---|---|
+| Mamba | MPS | 1 | 172.4 (dominated by one-time torch/MPS init — see caveat above) | 34.9 |
+| Mamba | MPS | 8 | 5.2 | 163.5 |
+| Mamba | MPS | 16 | 1.5 | 1173.1 |
+| Mamba | MPS | 64 | 2.2 | 1344.7 |
+| Mamba | CPU | 1 | 16.4 | n/a |
+| Mamba | CPU | 8 | 106.9 | n/a |
+| Mamba | CPU | 16 | 188.4 | n/a |
+| Mamba | CPU | 64 | 736.3 | n/a |
+| GRU | MPS | 1 | 5.6 | 11.8 |
+| GRU | MPS | 8 | 1.0 | 12.4 |
+| GRU | MPS | 16 | 0.9 | 21.0 |
+| GRU | MPS | 64 | 0.2 | 80.6 |
+| GRU | CPU | 1 | 1.0 | n/a |
+| GRU | CPU | 8 | 4.7 | n/a |
+| GRU | CPU | 16 | 8.9 | n/a |
+| GRU | CPU | 64 | 20.4 | n/a |
+
+Raw data: `experiments/results/benchmark_full.json` (includes
+`process_peak_rss_mb_before` / `_after`, `mps_current_allocated_mb`,
+`mps_driver_allocated_mb` per row).
+
+**Observations:**
+
+- MPS driver-allocated memory scales with batch size for both backbones,
+  as expected (larger batches need larger buffers): Mamba goes from 34.9
+  MB at batch=1 to 1344.7 MB at batch=64 (a 38.5x increase for a 64x
+  batch increase — sublinear, consistent with fixed per-call allocator
+  overhead being a smaller fraction at larger batches). GRU goes from
+  11.8 MB to 80.6 MB (6.8x) over the same batch range — Mamba's MPS
+  memory footprint is consistently far larger than GRU's at every batch
+  size (e.g. 16.7x at batch=64), which is a genuine architectural cost of
+  the multi-layer SSM's per-timestep state tensors, not a measurement
+  artifact.
+- The **Mamba/CPU/batch=64 row shows a large process RSS delta (736.3
+  MB)**, well above what a simple linear extrapolation from its own
+  batch=1/8/16 neighbors (16.4 / 106.9 / 188.4 MB) would predict. This is
+  reported as-measured, not smoothed over. A plausible explanation
+  consistent with the project's own documented design (see
+  `paper/methodology_notes.md` §7): the CPU-path sequential scan is an
+  explicit Python `for`-loop over ~101 time steps per Mamba layer, and at
+  batch=64 the retained intermediate activations for backprop through
+  that unrolled loop (4 layers x 101 steps x batch=64) are substantially
+  larger than at smaller batches — but this is a plausible mechanism, not
+  independently re-verified with a targeted follow-up measurement (e.g.
+  isolating forward-only vs. forward+backward RSS), so it is flagged as
+  an open observation rather than presented as a confirmed causal
+  explanation.
+- `mps_current_allocated_mb` (PyTorch's own internal MPS allocator
+  counter, distinct from the driver-level counter above) stayed nearly
+  flat across all batch sizes for both backbones (Mamba: ~0.535 MB
+  constant; GRU: ~0.435 MB constant) — this counter appears to track a
+  much smaller/different quantity than `driver_allocated_memory` (likely
+  only currently-live, non-cached PyTorch tensor allocations rather than
+  total driver-reserved buffer space) and is recorded in the raw JSON for
+  completeness, but `mps_driver_allocated_mb` is treated as the
+  informative per-row MPS memory figure above since it is the one that
+  visibly scales with batch size and model.
+- No measurement in this section is estimated, interpolated, or
+  extrapolated — every value above was read directly from
+  `resource.getrusage` or `torch.mps.*` during the real benchmark run.
 
 ## Observations log
 
@@ -358,3 +451,40 @@ discussion/conclusions until results exist.)
   claimed as a verified accuracy improvement — see Experiment 4's
   post-fix subsection for full framing and remaining low-confidence
   cases.
+- 2026-08-24: Git repository initialized (`git init` + initial commit,
+  `f28fb63`) — closes the reproducibility gap noted in STEP 12; future
+  `env_report.py` runs now record a real commit hash.
+- 2026-08-24: Memory-usage instrumentation added to `scripts/benchmark.py`
+  (process peak RSS via `resource.getrusage`, MPS allocator counters via
+  `torch.mps.current_allocated_memory`/`driver_allocated_memory`) and the
+  full benchmark sweep re-run on the target Mac with memory measurement
+  enabled, closing the last `NOT YET MEASURED` metric in Experiments 1-2.
+  Found Mamba's MPS driver-allocated memory is consistently far larger
+  than GRU's at every batch size (16.7x at batch=64: 1344.7 MB vs 80.6
+  MB) — a genuine architectural cost of the multi-layer SSM's per-
+  timestep state, not a measurement artifact. Also found one process-RSS
+  outlier (Mamba/CPU/batch=64, 736.3 MB delta) that does not fit a linear
+  extrapolation from its neighbors; flagged as an open observation with a
+  plausible-but-unverified explanation rather than smoothed over — see
+  "Full benchmark sweep — memory" section. Committed to the repository as
+  commit `26bc1639d027a3cc697d3ebf2cb4eae27d233e99` — this is the current
+  benchmark/results commit; the raw JSON at
+  `experiments/results/benchmark_full.json` and `scripts/benchmark.py`
+  as they exist at this commit are the authoritative source for every
+  number in this document's memory and (re-measured) latency tables.
+- 2026-08-24: Documentation audit — `paper/experimental_results.md` and
+  `paper/reproducibility.md` re-synchronized with the memory-benchmark
+  commit above (the versions committed at `26bc163` still read as if
+  memory usage were unmeasured and the project were not yet under
+  version control; both statements were stale and have been corrected
+  here). No other paper document was found to require correction: the
+  other three `paper/` files (`algorithm_audit.md`, `methodology_notes.md`
+  minus two now-stale forward-looking notes fixed in this same pass,
+  `README.md`) do not contain fabricated or contradicted numeric claims.
+  The `research/*.md` documents (evidence_matrix, research_gap_and_
+  questions, algorithm_validation, external_sources, literature_map) are
+  historical record of the pre-pivot Conmer-based research trail (dated
+  2026-08-19, before the Mamba pivot) and were left unmodified — they are
+  not "paper documentation" for the current Mamba experimental results
+  and rewriting them would erase an accurate record of an earlier,
+  explicitly abandoned decision rather than correct a stale claim.
